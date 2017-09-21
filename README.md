@@ -6,6 +6,11 @@ JWT based authentication for Jetty.  User roles are specific to Fedora Commons R
 Most jars are available via Maven.  Others I have stuck in here in the /lib directory and
 need to figure out a better place to store them.
 
+## Installing required JARs
+
+All required jars should be placed in ${jetty.home}/lib/ext.  The jars will then be assable to the 
+auth plugin.
+
 ## Wiring up to jetty
 
 This uses Jetty's standard auth mechanism.  This means you don't need to modify a the Fedora
