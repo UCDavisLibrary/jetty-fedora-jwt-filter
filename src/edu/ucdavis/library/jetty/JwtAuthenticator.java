@@ -25,7 +25,8 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.lang.ref.WeakReference; 
+import java.lang.ref.WeakReference;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -35,7 +36,12 @@ import java.util.concurrent.ConcurrentMap;
  * @author Justin Merz
  */
 public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator {
-
+	
+	// env config variables
+	private static final String JWT_SECRET = "JWT_SECRET";
+	private static final String JWT_ISSUER = "JWT_ISSUER";
+	private static final String JWT_COOKIE_NAME = "JWT_COOKIE_NAME";
+	
     private static final String AUTH_HEADER_KEY = "Authorization";
     // with trailing space to separate token
     private static final String AUTH_HEADER_VALUE_PREFIX = "Bearer "; 
@@ -108,7 +114,20 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
     public void setConfiguration(final AuthConfiguration configuration) {
     		// if no user provided cookieKey, set default
     		if( getCookieKey() == null ) setCookieKey(AUTH_COOKIE_KEY);
-    	
+    		
+    		// override config with environmental variables.
+    		// makes for easy docker setup
+    		Map<String, String> env = System.getenv();
+    		if( env.containsKey(JWT_SECRET) && !env.get(JWT_SECRET).equals("") ) {
+    			setSecret(env.get(JWT_SECRET));
+    		}
+    		if( env.containsKey(JWT_ISSUER) && !env.get(JWT_ISSUER).equals("") ) {
+    			setIssuer(env.get(JWT_ISSUER));
+    		}
+    		if( env.containsKey(JWT_COOKIE_NAME) && !env.get(JWT_COOKIE_NAME).equals("") ) {
+    			setCookieKey(env.get(JWT_COOKIE_NAME));
+    		}
+    		
     		try {
 			jwtParser.init(secret, issuer);
 		} catch (IllegalArgumentException e) {
