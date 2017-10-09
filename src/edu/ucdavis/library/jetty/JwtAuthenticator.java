@@ -4,13 +4,7 @@ import org.eclipse.jetty.security.Authenticator;
 import org.eclipse.jetty.security.ServerAuthException;
 import org.eclipse.jetty.server.Authentication;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
-//import org.jasig.cas.client.Protocol;
-//import org.jasig.cas.client.util.CommonUtils;
-//import org.jasig.cas.client.util.ReflectUtils;
-//import org.jasig.cas.client.validation.AbstractCasProtocolUrlBasedTicketValidator;
-//import org.jasig.cas.client.validation.AbstractUrlBasedTicketValidator;
-//import org.jasig.cas.client.validation.Assertion;
-//import org.jasig.cas.client.validation.TicketValidator;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,9 +15,7 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.lang.ref.WeakReference;
 import java.util.Map;
@@ -41,6 +33,7 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
 	private static final String JWT_SECRET = "JWT_SECRET";
 	private static final String JWT_ISSUER = "JWT_ISSUER";
 	private static final String JWT_COOKIE_NAME = "JWT_COOKIE_NAME";
+	private static final String JWT_VERBOSE = "JWT_VERBOSE";
 	
     private static final String AUTH_HEADER_KEY = "Authorization";
     // with trailing space to separate token
@@ -50,7 +43,10 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
 
     /** Name of authentication method provided by this authenticator. */
     public static final String AUTH_METHOD = "JWT";
-
+    
+    /** hack to allow env variable based logging changes **/
+    public Boolean verbose = false;
+    
     /** Session attribute used to cache JWT authentication data. */
     private static final String CACHED_AUTHN_ATTRIBUTE = "edu.ucdavis.library.jetty.Authentication";
 
@@ -127,6 +123,11 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
     		if( env.containsKey(JWT_COOKIE_NAME) && !env.get(JWT_COOKIE_NAME).equals("") ) {
     			setCookieKey(env.get(JWT_COOKIE_NAME));
     		}
+
+    		if( env.containsKey(JWT_VERBOSE) && !env.get(JWT_VERBOSE).equals("") ) {
+    			verbose = true;
+    			logger.info("verbose jwt logging enabled");
+    		}
     		
     		try {
 			jwtParser.init(secret, issuer);
@@ -157,17 +158,26 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
         // TODO: test this
         JwtAuthentication authentication = fetchCachedAuthentication(request);
         if (authentication != null) {
+        		if( verbose ) logger.info("returning cached jwt request");
             return authentication;
         }
 
         String jwt = getBearerToken( request );
-        logger.debug("jwt={}", jwt);
+        if( verbose ) logger.info("jwt={}", jwt);
         
         if (jwt != null ) {
             try {
                 final DecodedJWT decodedJwt = jwtParser.verify(jwt);
                 
                 if( decodedJwt == null ) {
+                		if( verbose ) logger.info("unable to decode jwt");
+	                	if( allowAnonymous() ) {
+	                		if( verbose ) logger.info("returning anonymous user");
+	                		JwtPrincipal principle = new JwtPrincipal("anonymous");
+	                		return new JwtAuthentication(this, "", principle);
+	                }
+	                	
+	                	if( verbose ) logger.info("returning unauthenticated");
                 		return Authentication.UNAUTHENTICATED;
                 }
                 
@@ -182,7 +192,13 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
                 authentication = new JwtAuthentication(this, jwt, principle);
                 cacheAuthentication(request, authentication);
             } catch (Exception e) {
-                throw new ServerAuthException("JWT ticket validation failed", e);
+            		if( verbose ) {
+            			logger.info("JWT ticket validation failed");
+            			logger.info("returning unauthenticated");
+            		}
+            		return Authentication.UNAUTHENTICATED;
+                // don't want to do this, sends 500, even if token was just expired
+            		// throw new ServerAuthException("JWT ticket validation failed", e);
             }
         }
         
@@ -191,10 +207,12 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
         }
         
         if( allowAnonymous() ) {
+        		if( verbose ) logger.info("returning anonymous user");
         		JwtPrincipal principle = new JwtPrincipal("anonymous");
         		return new JwtAuthentication(this, "", principle);
         }
         	
+        if( verbose ) logger.info("returning unauthenticated");
         return Authentication.UNAUTHENTICATED;        
     }
 
