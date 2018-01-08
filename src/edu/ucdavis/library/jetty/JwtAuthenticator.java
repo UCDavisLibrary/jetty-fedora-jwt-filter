@@ -155,12 +155,13 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
 
         final HttpServletRequest request = (HttpServletRequest) servletRequest;
         
-        // TODO: test this
-        JwtAuthentication authentication = fetchCachedAuthentication(request);
-        if (authentication != null) {
-        		if( verbose ) logger.info("returning cached jwt request");
-            return authentication;
-        }
+        JwtAuthentication authentication = null;
+        // TODO: Currently this is tied to the JSESSION id, which I don't think we want to use
+//        JwtAuthentication authentication = fetchCachedAuthentication(request);
+//        if (authentication != null) {
+//        		if( verbose ) logger.info("returning cached jwt request");
+//            return authentication;
+//        }
 
         String jwt = getBearerToken( request );
         if( verbose ) logger.info("jwt={}", jwt);
@@ -170,35 +171,41 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
                 final DecodedJWT decodedJwt = jwtParser.verify(jwt);
                 
                 if( decodedJwt == null ) {
-                		if( verbose ) logger.info("unable to decode jwt");
-	                	if( allowAnonymous() ) {
-	                		if( verbose ) logger.info("returning anonymous user");
-	                		JwtPrincipal principle = new JwtPrincipal("anonymous");
-	                		return new JwtAuthentication(this, "", principle);
-	                }
-	                	
-	                	if( verbose ) logger.info("returning unauthenticated");
-                		return Authentication.UNAUTHENTICATED;
+                    if( verbose ) logger.info("unable to decode jwt, returning unauthenticated");
+                    return Authentication.UNAUTHENTICATED;
                 }
                 
                 Claim username = decodedJwt.getClaims().get("username");
                 Claim admin = decodedJwt.getClaims().get("admin");
                 
-                JwtPrincipal principle = new JwtPrincipal(username.asString());
-                if( admin != null && admin.asBoolean() ) {
-                		principle.setAdmin(true);
+                if( username == null ) {
+                    if( verbose ) logger.info("no username provided in jwt, returning unauthenticated");
+                    return Authentication.UNAUTHENTICATED;
                 }
                 
+                boolean isAdmin = false;
+                if( admin != null ) {
+                	isAdmin = admin.asBoolean();
+                }
+                
+                if( verbose ) logger.info("jwt username={} isAdmin={}", username.asString(), isAdmin);
+                
+                JwtPrincipal principle = new JwtPrincipal(username.asString());
+                if( isAdmin) principle.setAdmin(true);
+                
                 authentication = new JwtAuthentication(this, jwt, principle);
-                cacheAuthentication(request, authentication);
+                
+                // See TODO above
+//                cacheAuthentication(request, authentication);
             } catch (Exception e) {
-            		if( verbose ) {
-            			logger.info("JWT ticket validation failed");
-            			logger.info("returning unauthenticated");
-            		}
-            		return Authentication.UNAUTHENTICATED;
+                if( verbose ) {
+                    logger.info("JWT ticket validation failed: {}", e.toString());
+                    logger.info("JWT Exception info", e);
+                    logger.info("returning unauthenticated");
+                }
+                return Authentication.UNAUTHENTICATED;
                 // don't want to do this, sends 500, even if token was just expired
-            		// throw new ServerAuthException("JWT ticket validation failed", e);
+                // throw new ServerAuthException("JWT ticket validation failed", e);
             }
         }
         
