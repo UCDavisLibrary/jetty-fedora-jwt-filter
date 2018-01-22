@@ -39,7 +39,7 @@ public class JwtAuthenticator extends AbstractLifeCycle implements Authenticator
     // with trailing space to separate token
     private static final String AUTH_HEADER_VALUE_PREFIX = "Bearer "; 
     
-    private static final String AUTH_COOKIE_KEY = "fedora-jwt";
+    private static final String AUTH_COOKIE_KEY = "fin-jwt";
 
     /** Name of authentication method provided by this authenticator. */
     public static final String AUTH_METHOD = "JWT";
